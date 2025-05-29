@@ -50,7 +50,7 @@ function App() {
       
       {/* Fallback for unmatched routes (can be inside or outside Layout depending on desired behavior) */}
       <Route path="*" element={<NotFound />} /> 
-    </Routes>
+    </Route>
   )
 }
 

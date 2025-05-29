@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import * as api from '../utils/api';
 import { useAuth } from './AuthContext'; // To get userId
 
-const CartContext = createContext(null);
+export const CartContext = createContext(null);
 
 export const CartProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth();

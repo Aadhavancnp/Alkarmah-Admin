@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import * as api from '../utils/api';
 import { useAuth } from './AuthContext'; // To get userId
 
-const WishlistContext = createContext(null);
+export const WishlistContext = createContext(null);
 
 export const WishlistProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
