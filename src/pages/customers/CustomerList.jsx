@@ -9,130 +9,61 @@ import {
   FiCalendar,
   FiEdit2,
   FiTrash2,
-  FiPlus
+  FiPlus,
+  FiLoader, // Added
+  FiAlertCircle // Added
 } from 'react-icons/fi'
 import PageHeader from '../../components/ui/PageHeader'
 import SearchFilter from '../../components/ui/SearchFilter'
 import EmptyState from '../../components/ui/EmptyState'
 import { toast } from 'react-toastify'
 import { format } from 'date-fns'
+import * as api from '../../utils/api' // Import API utility
 
 const CustomerList = () => {
   const [customers, setCustomers] = useState([])
   const [filteredCustomers, setFilteredCustomers] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(null) // For individual delete loading
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false) // For bulk delete loading
   const [selectedCustomers, setSelectedCustomers] = useState([])
   const [selectAll, setSelectAll] = useState(false)
-  
-  // Sample customer data (in a real app, this would come from an API)
-  useEffect(() => {
-    const sampleCustomers = [
-      {
-        id: 'C1001',
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-        phone: '(555) 123-4567',
-        location: 'New York, USA',
-        totalOrders: 12,
-        totalSpent: 1249.99,
-        lastOrder: new Date('2025-01-15'),
-        status: 'Active',
-        joinDate: new Date('2024-06-15')
-      },
-      {
-        id: 'C1002',
-        name: 'Jane Smith',
-        email: 'jane.smith@example.com',
-        phone: '(555) 234-5678',
-        location: 'Los Angeles, USA',
-        totalOrders: 8,
-        totalSpent: 879.50,
-        lastOrder: new Date('2025-01-10'),
-        status: 'Active',
-        joinDate: new Date('2024-08-20')
-      },
-      {
-        id: 'C1003',
-        name: 'Robert Johnson',
-        email: 'robert.johnson@example.com',
-        phone: '(555) 345-6789',
-        location: 'Chicago, USA',
-        totalOrders: 15,
-        totalSpent: 1589.75,
-        lastOrder: new Date('2025-01-12'),
-        status: 'Active',
-        joinDate: new Date('2024-05-10')
-      },
-      {
-        id: 'C1004',
-        name: 'Emily Davis',
-        email: 'emily.davis@example.com',
-        phone: '(555) 456-7890',
-        location: 'Houston, USA',
-        totalOrders: 5,
-        totalSpent: 459.95,
-        lastOrder: new Date('2025-01-08'),
-        status: 'Inactive',
-        joinDate: new Date('2024-09-05')
-      },
-      {
-        id: 'C1005',
-        name: 'Michael Brown',
-        email: 'michael.brown@example.com',
-        phone: '(555) 567-8901',
-        location: 'Miami, USA',
-        totalOrders: 20,
-        totalSpent: 2150.25,
-        lastOrder: new Date('2025-01-14'),
-        status: 'Active',
-        joinDate: new Date('2024-04-15')
-      }
-    ]
-    
-    // Simulate API call
-    setTimeout(() => {
-      setCustomers(sampleCustomers)
-      setFilteredCustomers(sampleCustomers)
+  const [error, setError] = useState(null)
+
+  const fetchCustomers = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await api.get('/users') // Assuming endpoint is /users
+      // Filter out admins if needed, or handle roles appropriately
+      // For now, displaying all users as "customers"
+      setCustomers(data)
+      setFilteredCustomers(data)
+    } catch (err) {
+      console.error("Failed to fetch customers:", err)
+      setError(err)
+      toast.error(err.response?.data?.message || 'Failed to fetch customers.')
+    } finally {
       setIsLoading(false)
-    }, 800)
+    }
+  }
+
+  useEffect(() => {
+    fetchCustomers()
   }, [])
   
   // Handle search and filter
-  const handleSearch = (query, filters) => {
+  const handleSearch = (query, filters) => { // filters are now empty
     let results = [...customers]
     
-    // Search by name or email
     if (query) {
       const lowerQuery = query.toLowerCase()
       results = results.filter(customer => 
-        customer.name.toLowerCase().includes(lowerQuery) || 
-        customer.email.toLowerCase().includes(lowerQuery)
+        (customer.name && customer.name.toLowerCase().includes(lowerQuery)) || 
+        (customer.email && customer.email.toLowerCase().includes(lowerQuery))
       )
     }
-    
-    // Apply filters
-    if (filters.status) {
-      results = results.filter(customer => customer.status === filters.status)
-    }
-    
-    if (filters.location) {
-      results = results.filter(customer => 
-        customer.location.toLowerCase().includes(filters.location.toLowerCase())
-      )
-    }
-    
-    if (filters.minOrders) {
-      results = results.filter(customer => 
-        customer.totalOrders >= parseInt(filters.minOrders)
-      )
-    }
-    
-    if (filters.minSpent) {
-      results = results.filter(customer => 
-        customer.totalSpent >= parseFloat(filters.minSpent)
-      )
-    }
-    
+    // No more advanced filters for now based on simplified schema
     setFilteredCustomers(results)
   }
   
@@ -141,7 +72,7 @@ const CustomerList = () => {
     if (selectAll) {
       setSelectedCustomers([])
     } else {
-      setSelectedCustomers(filteredCustomers.map(customer => customer.id))
+      setSelectedCustomers(filteredCustomers.map(customer => customer._id)) // Use _id
     }
     setSelectAll(!selectAll)
   }
@@ -153,7 +84,6 @@ const CustomerList = () => {
       setSelectAll(false)
     } else {
       setSelectedCustomers([...selectedCustomers, customerId])
-      // Check if all customers are now selected
       if (selectedCustomers.length + 1 === filteredCustomers.length) {
         setSelectAll(true)
       }
@@ -161,66 +91,52 @@ const CustomerList = () => {
   }
   
   // Handle customer deletion
-  const handleDeleteCustomer = (customerId) => {
-    // In a real app, this would make an API call
-    setCustomers(customers.filter(customer => customer.id !== customerId))
-    setFilteredCustomers(filteredCustomers.filter(customer => customer.id !== customerId))
-    setSelectedCustomers(selectedCustomers.filter(id => id !== customerId))
-    toast.success('Customer deleted successfully')
+  const handleDeleteCustomer = async (customerId) => {
+    setIsDeleting(customerId)
+    try {
+      await api.del(`/users/${customerId}`)
+      toast.success('Customer deleted successfully')
+      fetchCustomers() // Refresh list
+      setSelectedCustomers(selectedCustomers.filter(id => id !== customerId))
+    } catch (err) {
+      console.error("Failed to delete customer:", err)
+      toast.error(err.response?.data?.message || 'Failed to delete customer.')
+    } finally {
+      setIsDeleting(null)
+    }
   }
   
   // Handle bulk actions
-  const handleBulkAction = (action) => {
+  const handleBulkAction = async (action) => {
     if (selectedCustomers.length === 0) {
       toast.error('No customers selected')
       return
     }
     
     if (action === 'delete') {
-      // In a real app, this would make an API call
-      setCustomers(customers.filter(customer => !selectedCustomers.includes(customer.id)))
-      setFilteredCustomers(filteredCustomers.filter(customer => !selectedCustomers.includes(customer.id)))
-      setSelectedCustomers([])
-      setSelectAll(false)
-      toast.success(`${selectedCustomers.length} customers deleted successfully`)
+      setIsBulkDeleting(true)
+      try {
+        await Promise.all(selectedCustomers.map(id => api.del(`/users/${id}`)))
+        toast.success(`${selectedCustomers.length} customers deleted successfully`)
+        fetchCustomers() // Refresh list
+        setSelectedCustomers([])
+        setSelectAll(false)
+      } catch (err) {
+        console.error("Failed to delete customers:", err)
+        toast.error(err.response?.data?.message || 'Failed to delete customers in bulk.')
+      } finally {
+        setIsBulkDeleting(false)
+      }
     } else if (action === 'export') {
-      // Handle export logic
-      toast.success(`${selectedCustomers.length} customers exported`)
+      // Placeholder for export logic
+      toast.info(`${selectedCustomers.length} customers exported (simulated)`)
       setSelectedCustomers([])
       setSelectAll(false)
     }
   }
   
-  // Filter configurations
-  const filterOptions = [
-    {
-      name: 'status',
-      label: 'Status',
-      type: 'select',
-      options: [
-        { value: 'Active', label: 'Active' },
-        { value: 'Inactive', label: 'Inactive' }
-      ]
-    },
-    {
-      name: 'location',
-      label: 'Location',
-      type: 'text',
-      placeholder: 'Filter by city or country'
-    },
-    {
-      name: 'minOrders',
-      label: 'Min Orders',
-      type: 'number',
-      placeholder: '0'
-    },
-    {
-      name: 'minSpent',
-      label: 'Min Total Spent',
-      type: 'number',
-      placeholder: '0.00'
-    }
-  ]
+  // Filter configurations - Simplified
+  const filterOptions = [] // No filters for now as per schema simplification
 
   return (
     <div>
@@ -258,14 +174,16 @@ const CustomerList = () => {
             <button 
               onClick={() => handleBulkAction('export')}
               className="btn btn-secondary text-sm py-1"
+              disabled={isBulkDeleting}
             >
               Export
             </button>
             <button 
               onClick={() => handleBulkAction('delete')}
               className="btn btn-danger text-sm py-1"
+              disabled={isBulkDeleting}
             >
-              <FiTrash2 className="mr-1 h-4 w-4" />
+              {isBulkDeleting ? <FiLoader className="animate-spin mr-1 h-4 w-4" /> : <FiTrash2 className="mr-1 h-4 w-4" />}
               Delete
             </button>
           </div>
@@ -282,13 +200,23 @@ const CustomerList = () => {
               <div key={i} className="h-16 bg-gray-200 rounded mb-2"></div>
             ))}
           </div>
+        ) : error ? (
+          <EmptyState 
+            title="Error Fetching Customers"
+            description={error.response?.data?.message || "An unexpected error occurred. Please try again."}
+            icon={<FiAlertCircle className="h-8 w-8 text-error-500" />}
+            actionButton={
+              <button onClick={fetchCustomers} className="btn btn-primary">
+                Retry
+              </button>
+            }
+          />
         ) : filteredCustomers.length === 0 ? (
-          // Empty State
           <EmptyState 
             title="No customers found"
-            description="Try adjusting your search or filter to find what you're looking for."
+            description="No customers match your current search criteria or none have been added yet."
             icon={<FiUser className="h-8 w-8" />}
-            actionLink="/customers/add"
+            actionLink="/customers/add" // This link assumes an add customer page exists
             actionText="Add New Customer"
           />
         ) : (
@@ -308,25 +236,22 @@ const CustomerList = () => {
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left">Customer</th>
-                  <th className="px-4 py-3 text-left">Contact</th>
-                  <th className="px-4 py-3 text-left">Location</th>
-                  <th className="px-4 py-3 text-right">Orders</th>
-                  <th className="px-4 py-3 text-right">Total Spent</th>
-                  <th className="px-4 py-3 text-left">Last Order</th>
-                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Email</th>
+                  <th className="px-4 py-3 text-left">Joined</th>
+                  {/* Removed other columns like Location, Orders, Spent, Last Order, Status */}
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-gray-50">
+                  <tr key={customer._id} className="hover:bg-gray-50"> {/* Use _id */}
                     <td className="px-4 py-4">
                       <div className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={selectedCustomers.includes(customer.id)}
-                          onChange={() => handleSelectCustomer(customer.id)}
-                          className="w-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          checked={selectedCustomers.includes(customer._id)} // Use _id
+                          onChange={() => handleSelectCustomer(customer._id)} // Use _id
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                         />
                       </div>
                     </td>
@@ -337,13 +262,13 @@ const CustomerList = () => {
                         </div>
                         <div className="ml-3">
                           <Link 
-                            to={`/customers/${customer.id}`}
+                            to={`/customers/${customer._id}`} // Use _id
                             className="text-sm font-medium text-gray-900 hover:text-primary-600"
                           >
-                            {customer.name}
+                            {customer.name || 'N/A'}
                           </Link>
                           <p className="text-xs text-gray-500">
-                            Member since {format(customer.joinDate, 'MMM yyyy')}
+                            ID: {customer._id}
                           </p>
                         </div>
                       </div>
@@ -352,59 +277,32 @@ const CustomerList = () => {
                       <div className="text-sm">
                         <div className="flex items-center text-gray-500">
                           <FiMail className="h-4 w-4 mr-1" />
-                          {customer.email}
+                          {customer.email || 'N/A'}
                         </div>
-                        <div className="flex items-center text-gray-500 mt-1">
-                          <FiPhone className="h-4 w-4 mr-1" />
-                          {customer.phone}
-                        </div>
+                        {/* Phone removed as per schema */}
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <FiMapPin className="h-4 w-4 mr-1" />
-                        {customer.location}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-end text-sm">
-                        <FiShoppingBag className="h-4 w-4 mr-1 text-gray-400" />
-                        <span className="font-medium text-gray-900">
-                          {customer.totalOrders}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-right">
-                      <span className="font-medium text-gray-900">
-                        ${customer.totalSpent.toFixed(2)}
-                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center text-sm text-gray-500">
                         <FiCalendar className="h-4 w-4 mr-1" />
-                        {format(customer.lastOrder, 'MMM dd, yyyy')}
+                        {customer.createdAt ? format(new Date(customer.createdAt), 'MMM dd, yyyy') : 'N/A'}
                       </div>
                     </td>
-                    <td className="px-4 py-4">
-                      <span className={`badge ${
-                        customer.status === 'Active' ? 'badge-success' : 'badge-error'
-                      }`}>
-                        {customer.status}
-                      </span>
-                    </td>
+                    {/* Removed other data cells */}
                     <td className="px-4 py-4 text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <Link 
-                          to={`/customers/edit/${customer.id}`}
+                          to={`/customers/edit/${customer._id}`} // Use _id
                           className="text-gray-600 hover:text-primary-600"
                         >
                           <FiEdit2 className="h-5 w-5" />
                         </Link>
                         <button
-                          onClick={() => handleDeleteCustomer(customer.id)}
-                          className="text-gray-600 hover:text-error-500"
+                          onClick={() => handleDeleteCustomer(customer._id)} // Use _id
+                          className="text-gray-600 hover:text-error-500 disabled:opacity-50"
+                          disabled={isDeleting === customer._id}
                         >
-                          <FiTrash2 className="h-5 w-5" />
+                          {isDeleting === customer._id ? <FiLoader className="animate-spin h-5 w-5" /> : <FiTrash2 className="h-5 w-5" />}
                         </button>
                       </div>
                     </td>

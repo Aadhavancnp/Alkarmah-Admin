@@ -7,195 +7,98 @@ import {
   FiEye,
   FiTruck,
   FiX,
-  FiAlertCircle
+  FiAlertCircle,
+  FiLoader
 } from 'react-icons/fi'
 import PageHeader from '../../components/ui/PageHeader'
 import SearchFilter from '../../components/ui/SearchFilter'
 import EmptyState from '../../components/ui/EmptyState'
 import { toast } from 'react-toastify'
 import { format } from 'date-fns'
+import * as api from '../../utils/api' // Import API utility
 
 const OrderList = () => {
   const [searchParams] = useSearchParams()
   const [orders, setOrders] = useState([])
   const [filteredOrders, setFilteredOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false)
   const [selectedOrders, setSelectedOrders] = useState([])
   const [selectAll, setSelectAll] = useState(false)
+  const [error, setError] = useState(null)
   
   // Get status from URL params
   const statusParam = searchParams.get('status')
-  
-  // Sample order data (in a real app, this would come from an API)
-  useEffect(() => {
-    const sampleOrders = [
-      {
-        id: 'ORD-1001',
-        customer: 'John Doe',
-        email: 'john.doe@example.com',
-        date: new Date('2025-01-15T14:30:00'),
-        total: 129.99,
-        items: 3,
-        status: 'Delivered',
-        payment: 'Credit Card',
-        fulfillment: 'Shipped',
-      },
-      {
-        id: 'ORD-1002',
-        customer: 'Jane Smith',
-        email: 'jane.smith@example.com',
-        date: new Date('2025-01-14T10:15:00'),
-        total: 89.95,
-        items: 2,
-        status: 'Processing',
-        payment: 'PayPal',
-        fulfillment: 'Pending',
-      },
-      {
-        id: 'ORD-1003',
-        customer: 'Robert Johnson',
-        email: 'robert.johnson@example.com',
-        date: new Date('2025-01-14T09:45:00'),
-        total: 246.50,
-        items: 5,
-        status: 'Shipped',
-        payment: 'Credit Card',
-        fulfillment: 'Shipped',
-      },
-      {
-        id: 'ORD-1004',
-        customer: 'Emily Davis',
-        email: 'emily.davis@example.com',
-        date: new Date('2025-01-13T16:20:00'),
-        total: 59.99,
-        items: 1,
-        status: 'Pending',
-        payment: 'Awaiting Payment',
-        fulfillment: 'Not Fulfilled',
-      },
-      {
-        id: 'ORD-1005',
-        customer: 'Michael Brown',
-        email: 'michael.brown@example.com',
-        date: new Date('2025-01-12T11:05:00'),
-        total: 179.95,
-        items: 4,
-        status: 'Delivered',
-        payment: 'Credit Card',
-        fulfillment: 'Shipped',
-      },
-      {
-        id: 'ORD-1006',
-        customer: 'Sarah Wilson',
-        email: 'sarah.wilson@example.com',
-        date: new Date('2025-01-11T15:30:00'),
-        total: 119.90,
-        items: 2,
-        status: 'Cancelled',
-        payment: 'Refunded',
-        fulfillment: 'Cancelled',
-      },
-      {
-        id: 'ORD-1007',
-        customer: 'David Martinez',
-        email: 'david.martinez@example.com',
-        date: new Date('2025-01-10T09:10:00'),
-        total: 345.50,
-        items: 7,
-        status: 'Delivered',
-        payment: 'Credit Card',
-        fulfillment: 'Shipped',
-      },
-      {
-        id: 'ORD-1008',
-        customer: 'Amanda Lee',
-        email: 'amanda.lee@example.com',
-        date: new Date('2025-01-09T14:25:00'),
-        total: 79.99,
-        items: 2,
-        status: 'Processing',
-        payment: 'PayPal',
-        fulfillment: 'Pending',
-      },
-      {
-        id: 'ORD-1009',
-        customer: 'James Wilson',
-        email: 'james.wilson@example.com',
-        date: new Date('2025-01-08T10:40:00'),
-        total: 199.95,
-        items: 1,
-        status: 'Shipped',
-        payment: 'Credit Card',
-        fulfillment: 'Shipped',
-      },
-      {
-        id: 'ORD-1010',
-        customer: 'Lisa Taylor',
-        email: 'lisa.taylor@example.com',
-        date: new Date('2025-01-07T13:15:00'),
-        total: 149.99,
-        items: 3,
-        status: 'Delivered',
-        payment: 'Debit Card',
-        fulfillment: 'Shipped',
+
+  const fetchOrders = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await api.get('/orders')
+      setOrders(data)
+      // Apply client-side filtering if statusParam exists
+      if (statusParam) {
+        const normalizedStatusParam = statusParam.toLowerCase();
+        setFilteredOrders(data.filter(order => order.status.toLowerCase() === normalizedStatusParam))
+      } else {
+        setFilteredOrders(data)
       }
-    ]
-    
-    // Filter by status if provided in URL
-    let filteredByStatus = sampleOrders
-    if (statusParam) {
-      const status = statusParam.charAt(0).toUpperCase() + statusParam.slice(1)
-      filteredByStatus = sampleOrders.filter(order => order.status.toLowerCase() === statusParam.toLowerCase())
-    }
-    
-    // Simulate API call
-    setTimeout(() => {
-      setOrders(sampleOrders)
-      setFilteredOrders(filteredByStatus)
+    } catch (err) {
+      console.error("Failed to fetch orders:", err)
+      setError(err)
+      toast.error(err.response?.data?.message || 'Failed to fetch orders.')
+    } finally {
       setIsLoading(false)
-    }, 800)
-  }, [statusParam])
+    }
+  }
+  
+  useEffect(() => {
+    fetchOrders()
+  }, [statusParam]) // Refetch when statusParam changes
   
   // Handle search and filter
   const handleSearch = (query, filters) => {
-    let results = [...orders]
+    let results = [...orders] // Start with all orders
     
-    // Search by order ID or customer name
+    // Search by order ID, customer name, or email
     if (query) {
       const lowerQuery = query.toLowerCase()
       results = results.filter(order => 
-        order.id.toLowerCase().includes(lowerQuery) || 
-        order.customer.toLowerCase().includes(lowerQuery) ||
-        order.email.toLowerCase().includes(lowerQuery)
+        order._id.toLowerCase().includes(lowerQuery) || 
+        (order.user?.name && order.user.name.toLowerCase().includes(lowerQuery)) ||
+        (order.user?.email && order.user.email.toLowerCase().includes(lowerQuery))
       )
     }
     
-    // Apply filters
+    // Apply status filter from SearchFilter component
     if (filters.status) {
       results = results.filter(order => order.status === filters.status)
     }
     
-    if (filters.payment) {
-      results = results.filter(order => order.payment === filters.payment)
+    // Apply payment filter (Note: paymentStatus is not directly in OrderSchema, this might need adjustment)
+    // If paymentStatus is derived or part of a populated field, adjust access accordingly.
+    // For now, this filter might not work as expected if `order.paymentStatus` is not available.
+    if (filters.paymentStatus) { 
+      results = results.filter(order => order.paymentStatus === filters.paymentStatus) 
     }
     
     if (filters.dateFrom) {
       const fromDate = new Date(filters.dateFrom)
-      results = results.filter(order => new Date(order.date) >= fromDate)
+      results = results.filter(order => new Date(order.createdAt) >= fromDate)
     }
     
     if (filters.dateTo) {
       const toDate = new Date(filters.dateTo)
       toDate.setHours(23, 59, 59, 999) // End of the day
-      results = results.filter(order => new Date(order.date) <= toDate)
+      results = results.filter(order => new Date(order.createdAt) <= toDate)
     }
     
     if (filters.minTotal) {
-      results = results.filter(order => order.total >= parseFloat(filters.minTotal))
+      results = results.filter(order => order.totalAmount >= parseFloat(filters.minTotal))
     }
     
     if (filters.maxTotal) {
-      results = results.filter(order => order.total <= parseFloat(filters.maxTotal))
+      results = results.filter(order => order.totalAmount <= parseFloat(filters.maxTotal))
     }
     
     setFilteredOrders(results)
@@ -206,7 +109,7 @@ const OrderList = () => {
     if (selectAll) {
       setSelectedOrders([])
     } else {
-      setSelectedOrders(filteredOrders.map(order => order.id))
+      setSelectedOrders(filteredOrders.map(order => order._id)) // Use _id
     }
     setSelectAll(!selectAll)
   }
@@ -218,7 +121,6 @@ const OrderList = () => {
       setSelectAll(false)
     } else {
       setSelectedOrders([...selectedOrders, orderId])
-      // Check if all orders are now selected
       if (selectedOrders.length + 1 === filteredOrders.length) {
         setSelectAll(true)
       }
@@ -226,83 +128,80 @@ const OrderList = () => {
   }
   
   // Handle bulk actions
-  const handleBulkAction = (action) => {
+  const handleBulkAction = async (action) => {
     if (selectedOrders.length === 0) {
       toast.error('No orders selected')
       return
     }
     
-    // In a real app, this would make an API call
-    let message = ''
     let newStatus = ''
+    let message = ''
+
+    switch (action) {
+      case 'process': newStatus = 'Processing'; break;
+      case 'ship': newStatus = 'Shipped'; break;
+      case 'deliver': newStatus = 'Delivered'; break;
+      case 'cancel': newStatus = 'Cancelled'; break;
+      case 'export':
+        // Handle export logic (client-side for now)
+        toast.info(`${selectedOrders.length} orders exported (simulated)`)
+        setSelectedOrders([])
+        setSelectAll(false)
+        return;
+      default:
+        toast.error('Invalid action')
+        return;
+    }
+
+    message = `${selectedOrders.length} orders marked as ${newStatus.toLowerCase()}`
     
-    if (action === 'process') {
-      newStatus = 'Processing'
-      message = `${selectedOrders.length} orders marked as processing`
-    } else if (action === 'ship') {
-      newStatus = 'Shipped'
-      message = `${selectedOrders.length} orders marked as shipped`
-    } else if (action === 'deliver') {
-      newStatus = 'Delivered'
-      message = `${selectedOrders.length} orders marked as delivered`
-    } else if (action === 'cancel') {
-      newStatus = 'Cancelled'
-      message = `${selectedOrders.length} orders cancelled`
-    } else if (action === 'export') {
-      // Handle export logic
-      message = `${selectedOrders.length} orders exported`
+    setIsBulkUpdating(true)
+    try {
+      await Promise.all(
+        selectedOrders.map(orderId => api.put(`/orders/${orderId}/status`, { status: newStatus }))
+      )
       toast.success(message)
+      fetchOrders() // Refresh the list
+    } catch (err) {
+      console.error(`Failed to update orders to ${newStatus}:`, err)
+      toast.error(err.response?.data?.message || `Failed to update orders.`)
+    } finally {
+      setIsBulkUpdating(false)
       setSelectedOrders([])
       setSelectAll(false)
-      return
     }
-    
-    // Update status in both arrays
-    if (newStatus) {
-      const updateOrders = (orderList) => {
-        return orderList.map(order => {
-          if (selectedOrders.includes(order.id)) {
-            return { ...order, status: newStatus }
-          }
-          return order
-        })
-      }
-      
-      setOrders(updateOrders(orders))
-      setFilteredOrders(updateOrders(filteredOrders))
-      toast.success(message)
-    }
-    
-    setSelectedOrders([])
-    setSelectAll(false)
   }
   
-  // Filter configurations
+  // Filter configurations - adjust 'payment' to 'paymentStatus' if that's the intended field name
   const filterOptions = [
     {
       name: 'status',
       label: 'Status',
       type: 'select',
-      options: [
+      options: [ // These should match the possible status values from backend
         { value: 'Pending', label: 'Pending' },
         { value: 'Processing', label: 'Processing' },
         { value: 'Shipped', label: 'Shipped' },
         { value: 'Delivered', label: 'Delivered' },
         { value: 'Cancelled', label: 'Cancelled' },
+        { value: 'On Hold', label: 'On Hold'},
+        { value: 'Awaiting Payment', label: 'Awaiting Payment'},
+        { value: 'Payment Failed', label: 'Payment Failed'},
+        { value: 'Refunded', label: 'Refunded'},
+        { value: 'Partially Refunded', label: 'Partially Refunded'}
       ]
     },
-    {
-      name: 'payment',
-      label: 'Payment Status',
-      type: 'select',
-      options: [
-        { value: 'Credit Card', label: 'Credit Card' },
-        { value: 'PayPal', label: 'PayPal' },
-        { value: 'Debit Card', label: 'Debit Card' },
-        { value: 'Awaiting Payment', label: 'Awaiting Payment' },
-        { value: 'Refunded', label: 'Refunded' },
-      ]
-    },
+    // { // Removing payment filter as it's not directly in OrderSchema
+    //   name: 'paymentStatus', 
+    //   label: 'Payment Status',
+    //   type: 'select',
+    //   options: [
+    //     { value: 'Paid', label: 'Paid' },
+    //     { value: 'Pending', label: 'Pending' },
+    //     { value: 'Failed', label: 'Failed' },
+    //     { value: 'Refunded', label: 'Refunded' },
+    //   ]
+    // },
     {
       name: 'dateFrom',
       label: 'Date From',
@@ -439,27 +338,30 @@ const OrderList = () => {
             <button 
               onClick={() => handleBulkAction('process')}
               className="btn btn-warning text-sm py-1"
+              disabled={isBulkUpdating}
             >
-              Process
+              {isBulkUpdating ? <FiLoader className="animate-spin mr-1 h-4 w-4" /> : null} Process
             </button>
             <button 
               onClick={() => handleBulkAction('ship')}
               className="btn btn-info text-sm py-1"
+              disabled={isBulkUpdating}
             >
-              <FiTruck className="mr-1 h-4 w-4" />
-              Ship
+              {isBulkUpdating ? <FiLoader className="animate-spin mr-1 h-4 w-4" /> : <FiTruck className="mr-1 h-4 w-4" />} Ship
             </button>
             <button 
               onClick={() => handleBulkAction('deliver')}
               className="btn btn-success text-sm py-1"
+              disabled={isBulkUpdating}
             >
-              Mark Delivered
+              {isBulkUpdating ? <FiLoader className="animate-spin mr-1 h-4 w-4" /> : null} Mark Delivered
             </button>
             <button 
               onClick={() => handleBulkAction('cancel')}
               className="btn btn-danger text-sm py-1"
+              disabled={isBulkUpdating}
             >
-              <FiX className="mr-1 h-4 w-4" />
+              {isBulkUpdating ? <FiLoader className="animate-spin mr-1 h-4 w-4" /> : <FiX className="mr-1 h-4 w-4" />}
               Cancel
             </button>
           </div>
@@ -476,13 +378,24 @@ const OrderList = () => {
               <div key={i} className="h-16 bg-gray-200 rounded mb-2"></div>
             ))}
           </div>
+        ) : error ? (
+          <EmptyState 
+            title="Error Fetching Orders"
+            description={error.response?.data?.message || "An unexpected error occurred. Please try again later."}
+            icon={<FiAlertCircle className="h-8 w-8 text-error-500" />}
+            actionButton={
+              <button onClick={fetchOrders} className="btn btn-primary">
+                Retry
+              </button>
+            }
+          />
         ) : filteredOrders.length === 0 ? (
           // Empty State
           <EmptyState 
             title="No orders found"
             description={
               statusParam 
-                ? `No ${statusParam} orders found. They will appear here once customers place orders with this status.` 
+                ? `No orders with status "${statusParam}" found.` 
                 : "No orders found. They will appear here once customers place orders."
             }
             icon={<FiPackage className="h-8 w-8" />}
@@ -503,62 +416,60 @@ const OrderList = () => {
                       />
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-left">Order</th>
+                  <th className="px-4 py-3 text-left">Order ID</th>
                   <th className="px-4 py-3 text-left">Customer</th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-center">Items</th>
                   <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-left">Payment</th>
+                  {/* <th className="px-4 py-3 text-left">Payment</th> Removed as not in schema */}
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
+                  <tr key={order._id} className="hover:bg-gray-50"> {/* Use _id */}
                     <td className="px-4 py-4">
                       <div className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleSelectOrder(order.id)}
+                          checked={selectedOrders.includes(order._id)} // Use _id
+                          onChange={() => handleSelectOrder(order._id)} // Use _id
                           className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                         />
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <Link to={`/orders/${order.id}`} className="text-sm font-medium text-primary-600 hover:text-primary-800">
-                        {order.id}
+                      <Link to={`/orders/${order._id}`} className="text-sm font-medium text-primary-600 hover:text-primary-800">
+                        {order._id} {/* Use _id */}
                       </Link>
                     </td>
                     <td className="px-4 py-4">
                       <div>
-                        <p className="text-sm text-gray-900">{order.customer}</p>
-                        <p className="text-xs text-gray-500">{order.email}</p>
+                        <p className="text-sm text-gray-900">{order.user?.name || 'N/A'}</p>
+                        <p className="text-xs text-gray-500">{order.user?.email || 'N/A'}</p>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div>
-                        <p className="text-sm text-gray-900">{format(order.date, 'MMM dd, yyyy')}</p>
-                        <p className="text-xs text-gray-500">{format(order.date, 'hh:mm a')}</p>
+                        <p className="text-sm text-gray-900">{format(new Date(order.createdAt), 'MMM dd, yyyy')}</p>
+                        <p className="text-xs text-gray-500">{format(new Date(order.createdAt), 'hh:mm a')}</p>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-900 text-right font-medium">
-                      ${order.total.toFixed(2)}
+                      ${order.totalAmount?.toFixed(2) || '0.00'}
                     </td>
                     <td className="px-4 py-4 text-sm text-center">
-                      {order.items}
+                      {order.items?.length || 0}
                     </td>
                     <td className="px-4 py-4 text-sm">
-                      <span className={`badge ${statusColors[order.status]}`}>
+                      <span className={`badge ${statusColors[order.status] || 'badge-secondary'}`}>
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-500">
-                      {order.payment}
-                    </td>
+                    {/* <td className="px-4 py-4 text-sm text-gray-500">{order.paymentStatus || 'N/A'}</td> Removed */}
                     <td className="px-4 py-4 text-right text-sm font-medium">
-                      <Link to={`/orders/${order.id}`} className="text-primary-600 hover:text-primary-900">
+                      <Link to={`/orders/${order._id}`} className="text-primary-600 hover:text-primary-900"> {/* Use _id */}
                         <FiEye className="h-5 w-5" />
                       </Link>
                     </td>

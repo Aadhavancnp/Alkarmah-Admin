@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { FiSave, FiGlobe, FiDollarSign, FiTruck, FiMail, FiLock } from 'react-icons/fi'
+import { FiSave, FiGlobe, FiDollarSign, FiTruck, FiMail, FiLock, FiLoader, FiAlertCircle } from 'react-icons/fi'
 import PageHeader from '../../components/ui/PageHeader'
 import { toast } from 'react-toastify'
+import { useAuth } from '../../contexts/AuthContext' // Import useAuth
+import * as api from '../../utils/api' // Import api utility
 
 const Settings = () => {
+  const { user: currentUser } = useAuth(); // Get current user for email
+
   const [settings, setSettings] = useState({
     storeName: 'My E-commerce Store',
     storeEmail: 'store@example.com',
@@ -65,20 +69,80 @@ const Settings = () => {
     toast.success('Settings updated successfully')
   }
 
+  // State for Change Password form
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmNewPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('');
+
+  const handlePasswordChange = (e) => {
+    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+    setPasswordChangeError('');
+    setPasswordChangeSuccess('');
+  };
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    setPasswordChangeError('');
+    setPasswordChangeSuccess('');
+
+    if (!passwordData.oldPassword || !passwordData.newPassword || !passwordData.confirmNewPassword) {
+      setPasswordChangeError('All password fields are required.');
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmNewPassword) {
+      setPasswordChangeError('New passwords do not match.');
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      setPasswordChangeError('New password must be at least 6 characters long.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      if (!currentUser || !currentUser.email) {
+        setPasswordChangeError('User email not found. Please re-login.');
+        setIsChangingPassword(false);
+        return;
+      }
+      await api.post('/auth/change-password', {
+        email: currentUser.email,
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+      });
+      setPasswordChangeSuccess('Password changed successfully!');
+      toast.success('Password changed successfully!');
+      setPasswordData({ oldPassword: '', newPassword: '', confirmNewPassword: '' }); // Clear form
+    } catch (error) {
+      console.error('Change password error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to change password. Please try again.';
+      setPasswordChangeError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader 
         title="Settings"
-        subtitle="Configure your store settings"
+        subtitle="Configure your store settings and account details"
         breadcrumbs={[
           { text: 'Dashboard', link: '/' },
           { text: 'Settings' }
         ]}
       />
       
-      <form onSubmit={handleSubmit}>
+      {/* Existing settings form */}
+      <form onSubmit={handleSubmit} className="mb-8">
         <div className="space-y-6">
-          {/* Store Information */}
+          {/* Store Information Card */}
           <div className="card">
             <div className="flex items-center mb-4">
               <FiGlobe className="h-5 w-5 text-gray-400 mr-2" />
@@ -374,18 +438,93 @@ const Settings = () => {
             </div>
           </div>
           
-          {/* Save Button */}
-          <div className="flex justify-end">
+          {/* Save Button for general settings */}
+          <div className="flex justify-end mt-6">
             <button
               type="submit"
               className="btn btn-primary inline-flex items-center"
             >
               <FiSave className="mr-2 h-5 w-5" />
-              Save Settings
+              Save General Settings
             </button>
           </div>
         </div>
       </form>
+
+      {/* Change Password Form */}
+      <div className="card mt-8">
+        <div className="flex items-center mb-4">
+          <FiLock className="h-5 w-5 text-gray-400 mr-2" />
+          <h2 className="text-lg font-medium text-gray-900">Change Password</h2>
+        </div>
+
+        {passwordChangeError && (
+          <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 border border-red-400 rounded-md flex items-center">
+            <FiAlertCircle className="w-5 h-5 mr-2" />
+            <span>{passwordChangeError}</span>
+          </div>
+        )}
+        {passwordChangeSuccess && (
+          <div className="mb-4 p-3 text-sm text-green-700 bg-green-100 border border-green-400 rounded-md">
+            {passwordChangeSuccess}
+          </div>
+        )}
+
+        <form onSubmit={handlePasswordChangeSubmit}>
+          <div className="space-y-4">
+            <div className="form-group">
+              <label htmlFor="oldPassword" className="form-label">Current Password</label>
+              <input
+                type="password"
+                id="oldPassword"
+                name="oldPassword"
+                className="form-input"
+                value={passwordData.oldPassword}
+                onChange={handlePasswordChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="newPassword" className="form-label">New Password</label>
+              <input
+                type="password"
+                id="newPassword"
+                name="newPassword"
+                className="form-input"
+                value={passwordData.newPassword}
+                onChange={handlePasswordChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confirmNewPassword" className="form-label">Confirm New Password</label>
+              <input
+                type="password"
+                id="confirmNewPassword"
+                name="confirmNewPassword"
+                className="form-input"
+                value={passwordData.confirmNewPassword}
+                onChange={handlePasswordChange}
+                required
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="btn btn-primary inline-flex items-center"
+                disabled={isChangingPassword}
+              >
+                {isChangingPassword ? (
+                  <FiLoader className="animate-spin mr-2 h-5 w-5" />
+                ) : (
+                  <FiLock className="mr-2 h-5 w-5" />
+                )}
+                Change Password
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
