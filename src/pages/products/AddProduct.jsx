@@ -1,34 +1,39 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { FiSave, FiX, FiChevronLeft, FiImage, FiPlus } from 'react-icons/fi'
+import { FiSave, FiX, FiChevronLeft, FiImage, FiPlus, FiLoader } from 'react-icons/fi'
 import PageHeader from '../../components/ui/PageHeader'
 import { toast } from 'react-toastify'
+import * as api from '../../utils/api' // Import the api utility
 
 const AddProduct = () => {
   const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(false)
   
   const [productData, setProductData] = useState({
-    name: '',
-    description: '',
+    name: { en: '', ar: '' }, // Updated for localized names
+    description: { en: '', ar: '' }, // Updated for localized descriptions
     sku: '',
     price: '',
-    salePrice: '',
-    cost: '',
+    salePrice: '', // Will not be sent directly, schema has price only
+    cost: '', // Will not be sent directly
     category: '',
     stock: '',
-    images: [],
-    status: 'Active',
+    image: [], // Updated to match schema (array of strings for URLs)
+    status: 'Active', // Default status
     featured: false,
     tags: [],
     weight: '',
-    dimensions: {
+    dimensions: { // Will not be sent directly, schema has no dimensions
       length: '',
       width: '',
       height: '',
     },
-    variations: [],
+    variations: [], // Will not be sent directly, schema has no variations
   })
   
+  // Temporary state for comma-separated image URLs
+  const [imageUrls, setImageUrls] = useState('')
+
   // Options for categories
   const categories = [
     'Electronics',
@@ -46,16 +51,17 @@ const AddProduct = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     
-    if (name.includes('.')) {
-      // Handle nested objects (e.g., dimensions.length)
+    if (name === "name.en" || name === "name.ar" || name === "description.en" || name === "description.ar") {
       const [parent, child] = name.split('.')
-      setProductData({
-        ...productData,
+      setProductData(prevData => ({
+        ...prevData,
         [parent]: {
-          ...productData[parent],
+          ...prevData[parent],
           [child]: value
         }
-      })
+      }))
+    } else if (name === "imageUrls") {
+      setImageUrls(value) // Update temporary state for image URLs
     } else if (type === 'checkbox') {
       setProductData({
         ...productData,
@@ -99,54 +105,51 @@ const AddProduct = () => {
     })
   }
   
-  // Handle image upload
-  const handleImageChange = (e) => {
-    // This is a simplified version - in a real app, you'd upload to a server
-    const files = Array.from(e.target.files)
-    
-    // Create image previews
-    const newImages = files.map(file => ({
-      id: Math.random().toString(36).substring(2, 15),
-      name: file.name,
-      size: file.size,
-      url: URL.createObjectURL(file), // This creates a temporary URL
-      file: file
-    }))
-    
-    setProductData({
-      ...productData,
-      images: [...productData.images, ...newImages]
-    })
-  }
-  
-  const removeImage = (imageId) => {
-    setProductData({
-      ...productData,
-      images: productData.images.filter(image => image.id !== imageId)
-    })
-  }
-  
+  // Removed handleImageChange and removeImage as we are using text input for URLs
+
   // Handle form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    
-    // Basic validation
-    if (!productData.name || !productData.price || !productData.category) {
-      toast.error('Please fill in all required fields')
+    setIsLoading(true)
+
+    // Basic validation (adjust as per your needs)
+    if (!productData.name.en || !productData.name.ar || !productData.price || !productData.category || !productData.stock) {
+      toast.error('Please fill in all required fields (English Name, Arabic Name, Price, Category, Stock).')
+      setIsLoading(false)
       return
     }
-    
-    // In a real app, you'd make an API call here
-    console.log('Submitting product data:', productData)
-    
-    // Show success message
-    toast.success('Product added successfully')
-    
-    // Redirect to products list
-    navigate('/products')
+
+    const imagesArray = imageUrls.split(',').map(url => url.trim()).filter(url => url)
+
+    const payload = {
+      name: productData.name,
+      description: productData.description,
+      price: parseFloat(productData.price),
+      category: productData.category,
+      stock: parseInt(productData.stock, 10),
+      image: imagesArray, // Use the processed array of URLs
+      // Optional fields based on schema, add if needed:
+      // sku: productData.sku,
+      // status: productData.status,
+      // featured: productData.featured,
+      // tags: productData.tags,
+      // weight: parseFloat(productData.weight)
+    }
+
+    try {
+      await api.post('/products', payload)
+      toast.success('Product added successfully!')
+      navigate('/products')
+    } catch (error) {
+      console.error('Failed to add product:', error)
+      toast.error(error.response?.data?.message || 'Failed to add product. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
   
-  // Handle variations
+  // Handle variations (Keep or remove based on whether it's part of ProductSchema)
+  // For now, this part is not directly mapped to the simplified ProductSchema for POST
   const [showVariationForm, setShowVariationForm] = useState(false)
   const [variationAttribute, setVariationAttribute] = useState('')
   const [variationOptions, setVariationOptions] = useState('')
@@ -213,29 +216,58 @@ const AddProduct = () => {
               <div className="space-y-4">
                 <div className="form-group">
                   <label htmlFor="name" className="form-label">
-                    Product Name <span className="text-error-500">*</span>
+                    Product Name (English) <span className="text-error-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="name"
-                    name="name"
+                    id="name.en"
+                    name="name.en"
                     className="form-input"
-                    value={productData.name}
+                    value={productData.name.en}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="name.ar" className="form-label">
+                    Product Name (Arabic) <span className="text-error-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="name.ar"
+                    name="name.ar"
+                    className="form-input"
+                    value={productData.name.ar}
                     onChange={handleChange}
                     required
                   />
                 </div>
                 
                 <div className="form-group">
-                  <label htmlFor="description" className="form-label">
-                    Description
+                  <label htmlFor="description.en" className="form-label">
+                    Description (English)
                   </label>
                   <textarea
-                    id="description"
-                    name="description"
-                    rows="4"
+                    id="description.en"
+                    name="description.en"
+                    rows="3"
                     className="form-input"
-                    value={productData.description}
+                    value={productData.description.en}
+                    onChange={handleChange}
+                  ></textarea>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="description.ar" className="form-label">
+                    Description (Arabic)
+                  </label>
+                  <textarea
+                    id="description.ar"
+                    name="description.ar"
+                    rows="3"
+                    className="form-input"
+                    value={productData.description.ar}
                     onChange={handleChange}
                   ></textarea>
                 </div>
@@ -427,52 +459,27 @@ const AddProduct = () => {
             
             {/* Images */}
             <div className="card">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Product Images</h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-                {productData.images.map((image) => (
-                  <div key={image.id} className="relative group">
-                    <div className="aspect-square rounded-md overflow-hidden bg-gray-100 border border-gray-200">
-                      <img 
-                        src={image.url} 
-                        alt={image.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(image.id)}
-                      className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <FiX className="h-4 w-4 text-error-500" />
-                    </button>
-                    <p className="text-xs text-gray-500 truncate mt-1">{image.name}</p>
-                  </div>
-                ))}
-                
-                {/* Upload button */}
-                <div className="aspect-square rounded-md border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 cursor-pointer">
-                  <label htmlFor="image-upload" className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-                    <FiImage className="h-8 w-8 mb-2" />
-                    <span className="text-sm font-medium">Add Image</span>
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                  </label>
-                </div>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Product Images (URLs)</h2>
+              <div className="form-group">
+                <label htmlFor="imageUrls" className="form-label">
+                  Image URLs (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  id="imageUrls"
+                  name="imageUrls"
+                  className="form-input"
+                  value={imageUrls}
+                  onChange={handleChange}
+                  placeholder="e.g., http://example.com/image1.jpg, http://example.com/image2.jpg"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter URLs separated by commas.
+                </p>
               </div>
-              
-              <p className="text-xs text-gray-500">
-                Upload product images. First image will be used as the featured image.
-              </p>
             </div>
             
-            {/* Variations */}
+            {/* Variations - This section might be removed or simplified if not in ProductSchema for POST */}
             <div className="card">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900">Product Variations</h2>
@@ -644,13 +651,15 @@ const AddProduct = () => {
                 <button
                   type="submit"
                   className="btn btn-primary w-full justify-center"
+                  disabled={isLoading}
                 >
-                  <FiSave className="h-5 w-5 mr-2" />
-                  Save Product
+                  {isLoading ? <FiLoader className="animate-spin h-5 w-5 mr-2" /> : <FiSave className="h-5 w-5 mr-2" />}
+                  {isLoading ? 'Saving...' : 'Save Product'}
                 </button>
                 
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={() => navigate('/products')}
                   className="btn btn-secondary w-full justify-center"
                 >

@@ -1,89 +1,78 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { FiSave, FiX, FiChevronLeft, FiImage, FiPlus, FiTrash2, FiEye } from 'react-icons/fi'
+import { FiSave, FiX, FiChevronLeft, FiImage, FiPlus, FiTrash2, FiEye, FiLoader, FiShoppingCart, FiHeart } from 'react-icons/fi' // Added FiHeart
 import PageHeader from '../../components/ui/PageHeader'
 import { toast } from 'react-toastify'
+import * as api from '../../utils/api'
+import { useCart } from '../../contexts/CartContext'
+import { useWishlist } from '../../contexts/WishlistContext' // Import useWishlist
 
 const EditProduct = () => {
+  const { addToCart, isLoadingCart: isCartLoading } = useCart();
+  const { 
+    addToWishlist, 
+    removeFromWishlist, 
+    isProductInWishlist,
+    isLoadingWishlist 
+  } = useWishlist(); // Consume WishlistContext
   const navigate = useNavigate()
   const { id } = useParams()
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingPage, setIsLoadingPage] = useState(true)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isTogglingWishlist, setIsTogglingWishlist] = useState(false); // State for wishlist button
   
-  // Product data state
   const [productData, setProductData] = useState({
-    name: '',
-    description: '',
+    name: { en: '', ar: '' },
+    description: { en: '', ar: '' },
     sku: '',
     price: '',
-    salePrice: '',
-    cost: '',
+    // salePrice: '', // Not in schema, remove or handle if needed
+    // cost: '', // Not in schema
     category: '',
     stock: '',
-    images: [],
+    image: [], // Expecting array of URLs from API
     status: 'Active',
     featured: false,
     tags: [],
-    weight: '',
-    dimensions: {
-      length: '',
-      width: '',
-      height: '',
-    },
-    variations: [],
+    // weight: '', // Not in schema
+    // dimensions: { length: '', width: '', height: '' }, // Not in schema
+    // variations: [], // Not in schema
   })
+
+  // Temporary state for comma-separated image URLs for the form
+  const [imageUrls, setImageUrls] = useState('')
   
   // Fetch product data
   useEffect(() => {
-    // In a real app, this would be an API call
-    // Simulating API call with timeout
-    setTimeout(() => {
-      // Dummy data for the product
-      const dummyProduct = {
-        id: id,
-        name: 'Wireless Noise-Cancelling Headphones',
-        description: 'Premium wireless headphones with active noise cancellation, 30-hour battery life, and comfortable over-ear design.',
-        sku: 'WNCH-001',
-        price: '249.99',
-        salePrice: '199.99',
-        cost: '120.00',
-        category: 'Electronics',
-        stock: '18',
-        images: [
-          {
-            id: '1',
-            name: 'headphones-main.jpg',
-            url: 'https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-          },
-          {
-            id: '2',
-            name: 'headphones-alt.jpg',
-            url: 'https://images.pexels.com/photos/3394665/pexels-photo-3394665.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-          }
-        ],
-        status: 'Active',
-        featured: true,
-        tags: ['Wireless', 'Audio', 'Noise-Cancelling'],
-        weight: '0.35',
-        dimensions: {
-          length: '18.5',
-          width: '17.0',
-          height: '8.5',
-        },
-        variations: [
-          {
-            id: 'var1',
-            attribute: 'Color',
-            options: ['Black', 'Silver', 'Blue']
-          }
-        ],
+    const fetchProduct = async () => {
+      setIsLoadingPage(true)
+      try {
+        const fetchedProduct = await api.get(`/products/${id}`)
+        
+        // Ensure name and description are objects, even if API returns null/undefined for them
+        fetchedProduct.name = fetchedProduct.name || { en: '', ar: '' };
+        fetchedProduct.description = fetchedProduct.description || { en: '', ar: '' };
+        
+        setProductData(fetchedProduct)
+        // Convert array of image URLs to comma-separated string for form input
+        if (fetchedProduct.image && Array.isArray(fetchedProduct.image)) {
+          setImageUrls(fetchedProduct.image.join(', '))
+        }
+      } catch (error) {
+        console.error('Failed to fetch product:', error)
+        toast.error(error.response?.data?.message || 'Failed to fetch product details.')
+        // Optional: Redirect if product not found or critical error
+        // navigate('/products'); 
+      } finally {
+        setIsLoadingPage(false)
       }
-      
-      setProductData(dummyProduct)
-      setIsLoading(false)
-    }, 800)
-  }, [id])
+    }
+    fetchProduct()
+  }, [id, navigate])
   
-  // Options for categories
+  // Options for categories (Keep as is or fetch from API if dynamic)
   const categories = [
     'Electronics',
     'Clothing',
@@ -100,16 +89,17 @@ const EditProduct = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     
-    if (name.includes('.')) {
-      // Handle nested objects (e.g., dimensions.length)
+    if (name === "name.en" || name === "name.ar" || name === "description.en" || name === "description.ar") {
       const [parent, child] = name.split('.')
-      setProductData({
-        ...productData,
+      setProductData(prevData => ({
+        ...prevData,
         [parent]: {
-          ...productData[parent],
+          ...prevData[parent],
           [child]: value
         }
-      })
+      }))
+    } else if (name === "imageUrls") {
+      setImageUrls(value) // Update temporary state for image URLs
     } else if (type === 'checkbox') {
       setProductData({
         ...productData,
@@ -153,66 +143,67 @@ const EditProduct = () => {
     })
   }
   
-  // Handle image upload
-  const handleImageChange = (e) => {
-    // This is a simplified version - in a real app, you'd upload to a server
-    const files = Array.from(e.target.files)
-    
-    // Create image previews
-    const newImages = files.map(file => ({
-      id: Math.random().toString(36).substring(2, 15),
-      name: file.name,
-      size: file.size,
-      url: URL.createObjectURL(file), // This creates a temporary URL
-      file: file
-    }))
-    
-    setProductData({
-      ...productData,
-      images: [...productData.images, ...newImages]
-    })
-  }
-  
-  const removeImage = (imageId) => {
-    setProductData({
-      ...productData,
-      images: productData.images.filter(image => image.id !== imageId)
-    })
-  }
-  
+  // Removed handleImageChange and removeImage as we are using text input for URLs
+
   // Handle form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    
+    setIsUpdating(true)
+
     // Basic validation
-    if (!productData.name || !productData.price || !productData.category) {
-      toast.error('Please fill in all required fields')
+    if (!productData.name?.en || !productData.name?.ar || !productData.price || !productData.category || !productData.stock) {
+      toast.error('Please fill in all required fields (English Name, Arabic Name, Price, Category, Stock).')
+      setIsUpdating(false)
       return
     }
+
+    const imagesArray = imageUrls.split(',').map(url => url.trim()).filter(url => url)
     
-    // In a real app, you'd make an API call here
-    console.log('Updating product data:', productData)
-    
-    // Show success message
-    toast.success('Product updated successfully')
-    
-    // Redirect to products list
-    navigate('/products')
+    const payload = {
+      name: productData.name,
+      description: productData.description,
+      price: parseFloat(productData.price),
+      category: productData.category,
+      stock: parseInt(productData.stock, 10),
+      image: imagesArray,
+      // Include other fields from productData that are part of the schema and editable
+      sku: productData.sku,
+      status: productData.status,
+      featured: productData.featured,
+      tags: productData.tags,
+      // weight: productData.weight ? parseFloat(productData.weight) : undefined, // Example if weight was in schema
+    }
+
+    try {
+      await api.put(`/products/${id}`, payload)
+      toast.success('Product updated successfully!')
+      navigate('/products')
+    } catch (error) {
+      console.error('Failed to update product:', error)
+      toast.error(error.response?.data?.message || 'Failed to update product. Please try again.')
+    } finally {
+      setIsUpdating(false)
+    }
   }
   
   // Handle delete product
-  const handleDeleteProduct = () => {
-    // In a real app, you'd make an API call here
-    console.log('Deleting product:', id)
-    
-    // Show success message
-    toast.success('Product deleted successfully')
-    
-    // Redirect to products list
-    navigate('/products')
+  const handleDeleteProduct = async () => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      setIsDeleting(true)
+      try {
+        await api.del(`/products/${id}`)
+        toast.success('Product deleted successfully')
+        navigate('/products')
+      } catch (error) {
+        console.error('Failed to delete product:', error)
+        toast.error(error.response?.data?.message || 'Failed to delete product.')
+      } finally {
+        setIsDeleting(false)
+      }
+    }
   }
   
-  // Handle variations
+  // Handle variations (Keep or remove based on schema) - Unchanged
   const [showVariationForm, setShowVariationForm] = useState(false)
   const [variationAttribute, setVariationAttribute] = useState('')
   const [variationOptions, setVariationOptions] = useState('')
@@ -250,15 +241,54 @@ const EditProduct = () => {
     })
   }
   
-  // Loading UI
-  if (isLoading) {
+  // Handle Add to Cart - Unchanged
+  const handleAddToCart = async () => {
+    if (!productData || !productData._id) {
+      toast.error('Product data is not available.');
+      return;
+    }
+    setIsAddingToCart(true);
+    try {
+      await addToCart(productData._id, 1); // Add 1 quantity
+      toast.success(`${productData.name?.en || 'Product'} added to cart!`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to add product to cart.');
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
+  // Handle Toggle Wishlist
+  const handleToggleWishlist = async () => {
+    if (!productData || !productData._id) {
+      toast.error('Product data is not available.');
+      return;
+    }
+    setIsTogglingWishlist(true);
+    try {
+      if (isProductInWishlist(productData._id)) {
+        await removeFromWishlist(productData._id);
+        toast.success('Removed from wishlist!');
+      } else {
+        await addToWishlist(productData._id);
+        toast.success('Added to wishlist!');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to update wishlist.');
+    } finally {
+      setIsTogglingWishlist(false);
+    }
+  };
+
+  // Loading UI - Unchanged
+  if (isLoadingPage) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div>
+        <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div> {/* Adjusted color for consistency if needed */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="card">
-              <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+              <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div> {/* Adjusted color */}
               <div className="space-y-4">
                 <div className="h-10 bg-gray-200 rounded"></div>
                 <div className="h-32 bg-gray-200 rounded"></div>
@@ -278,27 +308,53 @@ const EditProduct = () => {
   return (
     <div>
       <PageHeader 
-        title={`Edit Product: ${productData.name}`}
+        title={productData.name?.en ? `Edit Product: ${productData.name.en}` : 'Edit Product'}
         breadcrumbs={[
           { text: 'Dashboard', link: '/' },
           { text: 'Products', link: '/products' },
           { text: 'Edit' }
         ]}
         actionButton={
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2"> {/* Use flex-wrap and gap for better responsiveness */}
             <Link to="/products" className="btn btn-secondary inline-flex items-center">
               <FiChevronLeft className="mr-2 h-5 w-5" />
               Back
             </Link>
-            <Link to={`/products/preview/${id}`} className="btn btn-primary inline-flex items-center">
+            {/* Preview button might be removed if not functional or relevant 
+            <Link to={`/products/preview/${id}`} className="btn btn-info inline-flex items-center">
               <FiEye className="mr-2 h-5 w-5" />
               Preview
-            </Link>
+            </Link> */}
+            <button
+              onClick={handleToggleWishlist}
+              className={`btn btn-secondary inline-flex items-center ${isProductInWishlist(productData?._id) ? 'text-error-500' : ''}`}
+              disabled={isTogglingWishlist || isLoadingWishlist || !productData?._id}
+              aria-label={isProductInWishlist(productData?._id) ? "Remove from wishlist" : "Add to wishlist"}
+            >
+              {isTogglingWishlist ? (
+                <FiLoader className="animate-spin mr-2 h-5 w-5" />
+              ) : (
+                <FiHeart className={`mr-2 h-5 w-5 ${isProductInWishlist(productData?._id) ? 'fill-current' : ''}`} />
+              )}
+              {isProductInWishlist(productData?._id) ? 'Wishlisted' : 'Wishlist'}
+            </button>
+            <button 
+              onClick={handleAddToCart}
+              className="btn btn-success inline-flex items-center"
+              disabled={isAddingToCart || isCartLoading || !productData?._id}
+            >
+              {isAddingToCart ? (
+                <FiLoader className="animate-spin mr-2 h-5 w-5" />
+              ) : (
+                <FiShoppingCart className="mr-2 h-5 w-5" />
+              )}
+              Add to Cart
+            </button>
           </div>
         }
       />
       
-      {/* Product Form */}
+      {/* Product Form - Unchanged for this step, assuming form fields remain the same */}
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
@@ -309,30 +365,59 @@ const EditProduct = () => {
               
               <div className="space-y-4">
                 <div className="form-group">
-                  <label htmlFor="name" className="form-label">
-                    Product Name <span className="text-error-500">*</span>
+                  <label htmlFor="name.en" className="form-label">
+                    Product Name (English) <span className="text-error-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="name"
-                    name="name"
+                    id="name.en"
+                    name="name.en"
                     className="form-input"
-                    value={productData.name}
+                    value={productData.name?.en || ''}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="name.ar" className="form-label">
+                    Product Name (Arabic) <span className="text-error-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="name.ar"
+                    name="name.ar"
+                    className="form-input"
+                    value={productData.name?.ar || ''}
                     onChange={handleChange}
                     required
                   />
                 </div>
                 
                 <div className="form-group">
-                  <label htmlFor="description" className="form-label">
-                    Description
+                  <label htmlFor="description.en" className="form-label">
+                    Description (English)
                   </label>
                   <textarea
-                    id="description"
-                    name="description"
-                    rows="4"
+                    id="description.en"
+                    name="description.en"
+                    rows="3"
                     className="form-input"
-                    value={productData.description}
+                    value={productData.description?.en || ''}
+                    onChange={handleChange}
+                  ></textarea>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="description.ar" className="form-label">
+                    Description (Arabic)
+                  </label>
+                  <textarea
+                    id="description.ar"
+                    name="description.ar"
+                    rows="3"
+                    className="form-input"
+                    value={productData.description?.ar || ''}
                     onChange={handleChange}
                   ></textarea>
                 </div>
@@ -524,52 +609,27 @@ const EditProduct = () => {
             
             {/* Images */}
             <div className="card">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Product Images</h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-                {productData.images.map((image) => (
-                  <div key={image.id} className="relative group">
-                    <div className="aspect-square rounded-md overflow-hidden bg-gray-100 border border-gray-200">
-                      <img 
-                        src={image.url} 
-                        alt={image.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(image.id)}
-                      className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <FiX className="h-4 w-4 text-error-500" />
-                    </button>
-                    <p className="text-xs text-gray-500 truncate mt-1">{image.name}</p>
-                  </div>
-                ))}
-                
-                {/* Upload button */}
-                <div className="aspect-square rounded-md border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 cursor-pointer">
-                  <label htmlFor="image-upload" className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-                    <FiImage className="h-8 w-8 mb-2" />
-                    <span className="text-sm font-medium">Add Image</span>
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                  </label>
-                </div>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Product Images (URLs)</h2>
+              <div className="form-group">
+                <label htmlFor="imageUrls" className="form-label">
+                  Image URLs (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  id="imageUrls"
+                  name="imageUrls"
+                  className="form-input"
+                  value={imageUrls}
+                  onChange={handleChange}
+                  placeholder="e.g., http://example.com/image1.jpg, http://example.com/image2.jpg"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter URLs separated by commas. Previous images: {productData.image?.join(', ')}
+                </p>
               </div>
-              
-              <p className="text-xs text-gray-500">
-                Upload product images. First image will be used as the featured image.
-              </p>
             </div>
             
-            {/* Variations */}
+            {/* Variations - Remove or adapt if not in schema */}
             <div className="card">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900">Product Variations</h2>
@@ -668,88 +728,26 @@ const EditProduct = () => {
           
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Dimensions */}
-            <div className="card">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Dimensions & Weight</h2>
-              
-              <div className="form-group">
-                <label htmlFor="weight" className="form-label">
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  id="weight"
-                  name="weight"
-                  className="form-input"
-                  value={productData.weight}
-                  onChange={handleChange}
-                />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 mt-4">
-                <div className="form-group">
-                  <label htmlFor="dimensions.length" className="form-label text-xs">
-                    Length (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    id="dimensions.length"
-                    name="dimensions.length"
-                    className="form-input"
-                    value={productData.dimensions.length}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="dimensions.width" className="form-label text-xs">
-                    Width (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    id="dimensions.width"
-                    name="dimensions.width"
-                    className="form-input"
-                    value={productData.dimensions.width}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="dimensions.height" className="form-label text-xs">
-                    Height (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    id="dimensions.height"
-                    name="dimensions.height"
-                    className="form-input"
-                    value={productData.dimensions.height}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Dimensions & Weight - Remove or adapt if not in schema */}
+            {/* For this refactor, assuming these are not part of the main product schema for PUT */}
+            {/* <div className="card"> ... </div> */}
             
             {/* Product Information */}
             <div className="card">
               <h2 className="text-lg font-medium text-gray-900 mb-4">Product Information</h2>
-              
               <div className="space-y-3">
-                <div>
-                  <span className="text-sm text-gray-500">Created On</span>
-                  <p className="text-sm font-medium text-gray-900">January 15, 2025</p>
-                </div>
-                
-                <div>
-                  <span className="text-sm text-gray-500">Last Updated</span>
-                  <p className="text-sm font-medium text-gray-900">January 20, 2025</p>
-                </div>
-                
+                {productData.createdAt && (
+                  <div>
+                    <span className="text-sm text-gray-500">Created On</span>
+                    <p className="text-sm font-medium text-gray-900">{new Date(productData.createdAt).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {productData.updatedAt && (
+                  <div>
+                    <span className="text-sm text-gray-500">Last Updated</span>
+                    <p className="text-sm font-medium text-gray-900">{new Date(productData.updatedAt).toLocaleDateString()}</p>
+                  </div>
+                )}
                 <div>
                   <span className="text-sm text-gray-500">Product ID</span>
                   <p className="text-sm font-medium text-gray-900">{id}</p>
@@ -763,15 +761,17 @@ const EditProduct = () => {
                 <button
                   type="submit"
                   className="btn btn-primary w-full justify-center"
+                  disabled={isUpdating || isLoadingPage}
                 >
-                  <FiSave className="h-5 w-5 mr-2" />
-                  Update Product
+                  {isUpdating ? <FiLoader className="animate-spin h-5 w-5 mr-2" /> : <FiSave className="h-5 w-5 mr-2" />}
+                  {isUpdating ? 'Updating...' : 'Update Product'}
                 </button>
                 
                 <button
                   type="button"
                   onClick={() => navigate('/products')}
                   className="btn btn-secondary w-full justify-center"
+                  disabled={isUpdating || isLoadingPage || isDeleting}
                 >
                   Cancel
                 </button>
@@ -780,9 +780,10 @@ const EditProduct = () => {
                   type="button"
                   onClick={handleDeleteProduct}
                   className="btn btn-danger w-full justify-center"
+                  disabled={isDeleting || isLoadingPage || isUpdating}
                 >
-                  <FiTrash2 className="h-5 w-5 mr-2" />
-                  Delete Product
+                  {isDeleting ? <FiLoader className="animate-spin h-5 w-5 mr-2" /> : <FiTrash2 className="h-5 w-5 mr-2" />}
+                  {isDeleting ? 'Deleting...' : 'Delete Product'}
                 </button>
               </div>
             </div>
